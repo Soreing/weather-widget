@@ -1,8 +1,16 @@
-require('dotenv').config()
+require('dotenv').config();
+
+const fs = require("fs");
+const http = require("http");
+const https = require("https");
+
 const express = require("express");
 const parser = require("body-parser");
 const ejs = require("ejs");
-const https = require("https");
+
+var privateKey  = fs.readFileSync(process.env.SSLKEY_PATH, 'utf8');
+var certificate = fs.readFileSync(process.env.SSLCERT_PATH, 'utf8');
+var credentials = {key: privateKey, cert: certificate};
 
 const UNITS = {
     metric: {
@@ -91,55 +99,68 @@ app.set("view engine", "ejs");
 app.use(parser.urlencoded({extended: true}));
 app.use(express.static("public"))
 
-app.listen(3000, ()=>{
-    console.log("Hello");
-})
+var server;
+
+if(process.env.SSL != 'disabled'){
+    server = https.createServer(credentials, app);
+    server.listen(10001);
+} else {
+    server = http.createServer(app);
+    server.listen(80);
+}
 
 app.get("/", (req,res)=>{
-    const {city="London", units="metric"} = req.query;
+    
+	if(!req.secure){
+		res.redirect('https://'+req.hostname+req.url);
+	}
+	else {
+			
+		const {city="London", units="metric"} = req.query;
 
-    const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${process.env.OPENWHEATHERAPIKEY}`;
-    const unsplashURL = `https://api.unsplash.com/search/photos?per_page=1&client_id=${process.env.UNSPLASHAPIKEY}&orientation=landscape&query=${city}%20city`;
-    const ipgeolocURL = `https://api.ipgeolocation.io/timezone?apiKey=${process.env.IPGEOLOCATIONAPIKEY}&location=${city}`;
+		const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${process.env.OPENWHEATHERAPIKEY}`;
+		const unsplashURL = `https://api.unsplash.com/search/photos?per_page=1&client_id=${process.env.UNSPLASHAPIKEY}&orientation=landscape&query=${city}%20city`;
+		const ipgeolocURL = `https://api.ipgeolocation.io/timezone?apiKey=${process.env.IPGEOLOCATIONAPIKEY}&location=${city}`;
 
-    let weatherPromise = request(weatherURL);
-    let unsplashPromise = request(unsplashURL);
-    let ipgeolocPromise = request(ipgeolocURL);
+		let weatherPromise = request(weatherURL);
+		let unsplashPromise = request(unsplashURL);
+		let ipgeolocPromise = request(ipgeolocURL);
 
-    Promise.all([weatherPromise, unsplashPromise, ipgeolocPromise]).then((values)=>{
-        const [weatherPackets, unsplashPackets, ipgeolocPackets] = values;
+		Promise.all([weatherPromise, unsplashPromise, ipgeolocPromise]).then((values)=>{
+			const [weatherPackets, unsplashPackets, ipgeolocPackets] = values;
 
-        const weatherData = JSON.parse(weatherPackets[0]);
-        const unsplashData = JSON.parse(Buffer.concat(unsplashPackets));
-        const ipgeolocData = JSON.parse(ipgeolocPackets[0]);
+			const weatherData = JSON.parse(weatherPackets[0]);
+			const unsplashData = JSON.parse(Buffer.concat(unsplashPackets));
+			const ipgeolocData = JSON.parse(ipgeolocPackets[0]);
 
-        const {
-            date_time_unix: unix, 
-            timezone_offset: timezone, 
-            is_dst: dst
-        }  = ipgeolocData;
+			const {
+				date_time_unix: unix, 
+				timezone_offset: timezone, 
+				is_dst: dst
+			}  = ipgeolocData;
 
-        if(weatherData.cod != 200){
-            res.render("error.ejs", {errcode:weatherData.cod});
-            return;
-        }
+			if(weatherData.cod != 200){
+				res.render("error.ejs", {errcode:weatherData.cod});
+				return;
+			}
 
-        let options = {
-            city: city,
-            ...getPlaceTime(unix, timezone, dst),
+			let options = {
+				city: city,
+				...getPlaceTime(unix, timezone, dst),
 
-            weather: weatherData.weather[0].main,
-            temperature: `${Math.floor(weatherData.main.temp)}°${UNITS[units].temperature}`,
-            humidity: `${weatherData.main.humidity}%`,
-            visibility: `${weatherData.visibility/100}%`,
-            cloudiness: `${weatherData.clouds.all}%`,
-            windSpeed: `${weatherData.wind.speed} ${UNITS[units].wind}`,
-            windDirection: getWindDirection(weatherData.wind.deg),
+				weather: weatherData.weather[0].main,
+				temperature: `${Math.floor(weatherData.main.temp)}°${UNITS[units].temperature}`,
+				humidity: `${weatherData.main.humidity}%`,
+				visibility: `${weatherData.visibility/100}%`,
+				cloudiness: `${weatherData.clouds.all}%`,
+				windSpeed: `${weatherData.wind.speed} ${UNITS[units].wind}`,
+				windDirection: getWindDirection(weatherData.wind.deg),
 
-            icon: weatherData.weather[0].icon,
-            imageURL: unsplashData.results[0].urls.regular
-        };
+				icon: weatherData.weather[0].icon,
+				imageURL: unsplashData.results[0].urls.regular
+			};
 
-        res.render("weathercard.ejs", options);
-    })
+			res.render("weathercard.ejs", options);
+		})
+	}
 })
