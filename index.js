@@ -1,4 +1,9 @@
-require('dotenv').config()
+require('dotenv').config();
+
+const fs = require("fs");
+const http = require("http");
+const https = require("https");
+
 const express = require("express");
 const parser = require("body-parser");
 const ejs = require("ejs");
@@ -277,9 +282,9 @@ app.get("/", async (req,res)=>{
             date_time_unix: unix, timezone_offset: timezone, is_dst: dst
         }  = ipgeolocResponse.data;
 
-        let options = {
-            city: city,
-            ...getPlaceTime(unix, timezone, dst),
+			let options = {
+				city: city,
+				...getPlaceTime(unix, timezone, dst),
 
             weather: weatherResponse.data.weather[0].main,
             temperature: `${Math.floor(weatherResponse.data.main.temp)}°${UNITS[units].temperature}`,
