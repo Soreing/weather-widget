@@ -295,6 +295,12 @@ app.get("/", async (req,res)=>{
             imageURL: unsplashResponse.data.results[0].urls.regular
         };
 
+        console.log(JSON.stringify({
+            "level": "info", "ts":new Date().getTime(), 
+            "message": "request complete",
+            "tid": traceId,
+        }))
+
         res.render("weathercard.ejs", options);
     } catch(err) {
         console.log(JSON.stringify({
@@ -302,6 +308,7 @@ app.get("/", async (req,res)=>{
             "message": "unexpected error",
             "tid": traceId, "err": err.message, 
         }))
+
         res.render("error.ejs", {errcode:500});
         return;
     }
