@@ -108,17 +108,32 @@ function getPlaceTime(unix, timezone, dst){
 }
 
 const app = express();
-
 app.set("view engine", "ejs");
 app.use(parser.urlencoded({extended: true}));
 app.use(express.static("public"))
 
-app.listen(3000, ()=>{
+const server = app.listen(3000, ()=>{
     console.log(JSON.stringify({
         "level": "info", "ts":new Date().getTime(), 
         "message": "server started",
     }))
 })
+
+process.once('SIGINT', function (code) {
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "server shutting down",
+    }))
+    server.close();
+});
+
+process.once('SIGTERM', function (code) {
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "server shutting down",
+    }))
+    server.close();
+});
 
 app.get("/", async (req,res)=>{
     const traceId = crypto.randomBytes(16).toString("hex");
