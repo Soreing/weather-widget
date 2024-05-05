@@ -24,21 +24,21 @@ spec:
     spec:
       containers:
         - env:
-            - name: OPEN_WHEATHER_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: weatherapp-secrets
-                  key: weatherApiKey
-            - name: UNSPLASH_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: common-secrets
-                  key: unsplashApiKey
-            - name: IP_GEOLOCATION_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: openWeatherApiKey
-                  key: ipGeoApiKey
+          - name: OPEN_WHEATHER_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: weatherapp-secrets
+                key: weatherApiKey
+          - name: UNSPLASH_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: weatherapp-secrets
+                key: unsplashApiKey
+          - name: IP_GEOLOCATION_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: weatherapp-secrets
+                key: ipGeoApiKey
           image: soreing/weatherapp:prod
           name: weatherapp
           ports:
