@@ -2,8 +2,39 @@ require('dotenv').config()
 const express = require("express");
 const parser = require("body-parser");
 const ejs = require("ejs");
-const https = require("https");
+const axios = require('axios');
+const crypto = require("crypto");
 
+const OPEN_WHEATHER_API_KEY = process.env.OPEN_WHEATHER_API_KEY
+const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY
+const IP_GEOLOCATION_API_KEY = process.env.IP_GEOLOCATION_API_KEY
+
+if (OPEN_WHEATHER_API_KEY == null) {
+    console.log(JSON.stringify({
+        "level": "error", "ts":new Date().getTime(), 
+        "message": "failed to configure application",
+        "err": "open weather api key not provided",
+    }))
+    process.exit(1)
+}
+if (UNSPLASH_ACCESS_KEY == null) {
+    console.log(JSON.stringify({
+        "level": "error", "ts":new Date().getTime(), 
+        "message": "failed to configure application",
+        "err": "unsplash api key not provided",
+    }))
+    process.exit(1)
+}
+if (IP_GEOLOCATION_API_KEY == null) {
+    console.log(JSON.stringify({
+        "level": "error", "ts":new Date().getTime(), 
+        "message": "failed to configure application",
+        "err": "ip geolocation api key not provided",
+    }))
+    process.exit(1)
+}
+
+// UNITS is a list of defined units in metric, imperial and standard format
 const UNITS = {
     metric: {
         temperature: "C",
@@ -19,30 +50,43 @@ const UNITS = {
     },
 }
 
+// MONTHS is a list of labels for months where January is at index 0 and 
+// December is at index 11.
 const MONTHS = [ 
     "January",   "February", "March",    "April", 
     "May",       "June",     "July",     "August",
     "September", "October",  "November", "December"
 ]
 
+// getWindDirection returns the label for the wind direction calculated from 
+// and angle. 0 degree is north.
 function getWindDirection(angle){
-    
-    directions = [];
-
-    if(angle > 281 || angle < 79) {directions.push("North");}
-    else if(angle < 259 && angle > 101) {directions.push("South");}
-
-    if(angle > 349 && angle < 191) {directions.push("West");}
-    else if(angle < 11 && angle > 169) {directions.push("East");}
-
-    return directions.join(" ");
+    if (angle < 23) {
+        return "North"       
+    } else if (angle < 68) {
+        return "North East"  
+    } else if (angle < 113) {
+        return "East"  
+    } else if (angle < 158) {
+        return "South East"  
+    } else if (angle < 203) {
+        return "South"  
+    } else if (angle < 248) {
+        return "South West"  
+    } else if (angle < 293) {
+        return "West"  
+    } else if (angle < 338) {
+        return "North West"  
+    } else {
+        return "North"  
+    }
 }
 
+// getPlaceTime returns the date and time in the format of 01:02 1st of January.
+// It takes into account the timezone and the daylight saving time.
 function getPlaceTime(unix, timezone, dst){
-    
     const date = new Date();
     const offsetHours = timezone + (dst?1:0);
-
     date.setTime(unix * 1000 + offsetHours * 3600000);
 
     const day    = date.getUTCDate();
@@ -61,30 +105,6 @@ function getPlaceTime(unix, timezone, dst){
     }
 }
 
-function request(url){
-    return new Promise((resolve, reject) =>{
-        https.get(url, (res) => {
-
-            let packets = [];
-
-            res.on("data", (data)=>{
-                packets.push(data);
-            })
-
-            res.on("end", ()=>{
-                resolve(packets);
-            })
-
-            res.on('error', (err)=>{
-                reject(err);
-                console.log("Hello");
-            });
-        });
-    });
-}
-
-
-
 const app = express();
 
 app.set("view engine", "ejs");
@@ -92,54 +112,195 @@ app.use(parser.urlencoded({extended: true}));
 app.use(express.static("public"))
 
 app.listen(3000, ()=>{
-    console.log("Hello");
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "server started",
+    }))
 })
 
-app.get("/", (req,res)=>{
+app.get("/", async (req,res)=>{
+    const traceId = crypto.randomBytes(16).toString("hex");
+    console.log(JSON.stringify({
+        "level": "info",  "ts":new Date().getTime(), 
+        "message": "creating weather card", "tid": traceId,
+    }))
+
     const {city="London", units="metric"} = req.query;
 
-    const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${process.env.OPENWHEATHERAPIKEY}`;
-    const unsplashURL = `https://api.unsplash.com/search/photos?per_page=1&client_id=${process.env.UNSPLASHAPIKEY}&orientation=landscape&query=${city}%20city`;
-    const ipgeolocURL = `https://api.ipgeolocation.io/timezone?apiKey=${process.env.IPGEOLOCATIONAPIKEY}&location=${city}`;
-
-    let weatherPromise = request(weatherURL);
-    let unsplashPromise = request(unsplashURL);
-    let ipgeolocPromise = request(ipgeolocURL);
-
-    Promise.all([weatherPromise, unsplashPromise, ipgeolocPromise]).then((values)=>{
-        const [weatherPackets, unsplashPackets, ipgeolocPackets] = values;
-
-        const weatherData = JSON.parse(weatherPackets[0]);
-        const unsplashData = JSON.parse(Buffer.concat(unsplashPackets));
-        const ipgeolocData = JSON.parse(ipgeolocPackets[0]);
-
-        const {
-            date_time_unix: unix, 
-            timezone_offset: timezone, 
-            is_dst: dst
-        }  = ipgeolocData;
-
-        if(weatherData.cod != 200){
-            res.render("error.ejs", {errcode:weatherData.cod});
-            return;
+    // get the weather information
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "getting weather information",
+        "tid": traceId,"city": city, "units": units,
+    }))
+    let weatherPromise = axios({
+        method: 'get',
+        url: 'https://api.openweathermap.org/data/2.5/weather',
+        params: {
+            "q": city,
+            "units": units,
+            "appid": OPEN_WHEATHER_API_KEY,
         }
+    })
+
+    // get an image of the city to display
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "getting location image",
+        "tid": traceId,"city": city
+    }))
+    let unsplashPromise = axios({
+        method: 'get',
+        url: 'https://api.unsplash.com/search/photos',
+        params: {
+            "per_page": 1,
+            "orientation": "landscape",
+            "query": city + " city"
+        },
+        headers: {
+            "Authorization": "Client-ID "+ UNSPLASH_ACCESS_KEY
+        }
+    })
+
+    // get date time information of the city
+    console.log(JSON.stringify({
+        "level": "info", "ts":new Date().getTime(), 
+        "message": "getting date time info",
+        "tid": traceId,"location": city
+    }))
+    let ipgeolocPromise = axios({
+        method: 'get',
+        url: 'https://api.ipgeolocation.io/timezone',
+        params: {
+            "apiKey": IP_GEOLOCATION_API_KEY,
+            "location": city,
+        }
+    })
+
+    // awaiting the weather request's response
+    let weatherResponse
+    try {
+        weatherResponse = await weatherPromise
+    } catch(err) {
+        let errCode = 500
+        if (err.response) {
+            errCode = response.status
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to get weather information",
+                "tid": traceId, "err": err.message, "status": response.status, 
+                "data": response.data
+            }))
+        } else if (err.request) {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to make request",
+                "tid": traceId, "err": err.message
+            }))
+        } else {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "unexpected error",
+                "tid": traceId, "err": err.message, 
+            }))
+        }
+        res.render("error.ejs", {errcode:errCode});
+        return;
+    }
+
+    // awaiting the location image request's response
+    let unsplashResponse 
+    try {
+        unsplashResponse = await unsplashPromise
+    } catch(err) {
+        let errCode = 500
+        if (err.response) {
+            errCode = response.status
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to get location image",
+                "tid": traceId, "err": err.message, "status": response.status, 
+                "data": response.data
+            }))
+        } else if (err.request) {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to make request",
+                "tid": traceId, "err": err.message
+            }))
+        } else {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "unexpected error",
+                "tid": traceId, "err": err.message, 
+            }))
+        }
+        res.render("error.ejs", {errcode:errCode});
+        return;
+    }
+
+    // awaiting the date time information request's response
+    let ipgeolocResponse
+    try {
+        ipgeolocResponse = await ipgeolocPromise
+    } catch(err) {
+        let errCode = 500
+        if (err.response) {
+            errCode = response.status
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to get date time information",
+                "tid": traceId, "err": err.message, "status": response.status, 
+                "data": response.data
+            }))
+        } else if (err.request) {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "failed to make request",
+                "tid": traceId, "err": err.message
+            }))
+        } else {
+            console.log(JSON.stringify({
+                "level": "error", "ts":new Date().getTime(), 
+                "message": "unexpected error",
+                "tid": traceId, "err": err.message, 
+            }))
+        }
+        res.render("error.ejs", {errcode:errCode});
+        return;
+    }
+
+    // compile results
+    console.log
+    try {
+        const {
+            date_time_unix: unix, timezone_offset: timezone, is_dst: dst
+        }  = ipgeolocResponse.data;
 
         let options = {
             city: city,
             ...getPlaceTime(unix, timezone, dst),
 
-            weather: weatherData.weather[0].main,
-            temperature: `${Math.floor(weatherData.main.temp)}°${UNITS[units].temperature}`,
-            humidity: `${weatherData.main.humidity}%`,
-            visibility: `${weatherData.visibility/100}%`,
-            cloudiness: `${weatherData.clouds.all}%`,
-            windSpeed: `${weatherData.wind.speed} ${UNITS[units].wind}`,
-            windDirection: getWindDirection(weatherData.wind.deg),
+            weather: weatherResponse.data.weather[0].main,
+            temperature: `${Math.floor(weatherResponse.data.main.temp)}°${UNITS[units].temperature}`,
+            humidity: `${weatherResponse.data.main.humidity}%`,
+            visibility: `${weatherResponse.data.visibility/100}%`,
+            cloudiness: `${weatherResponse.data.clouds.all}%`,
+            windSpeed: `${weatherResponse.data.wind.speed} ${UNITS[units].wind}`,
+            windDirection: getWindDirection(weatherResponse.data.wind.deg),
 
-            icon: weatherData.weather[0].icon,
-            imageURL: unsplashData.results[0].urls.regular
+            icon: weatherResponse.data.weather[0].icon,
+            imageURL: unsplashResponse.data.results[0].urls.regular
         };
 
         res.render("weathercard.ejs", options);
-    })
+    } catch(err) {
+        console.log(JSON.stringify({
+            "level": "error", "ts":new Date().getTime(), 
+            "message": "unexpected error",
+            "tid": traceId, "err": err.message, 
+        }))
+        res.render("error.ejs", {errcode:500});
+        return;
+    }
 })
