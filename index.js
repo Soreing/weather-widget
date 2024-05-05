@@ -1,15 +1,12 @@
 require('dotenv').config();
 
-const fs = require("fs");
-const http = require("http");
-const https = require("https");
-
 const express = require("express");
 const parser = require("body-parser");
 const ejs = require("ejs");
 const axios = require('axios');
 const crypto = require("crypto");
 
+// configuration
 const OPEN_WHEATHER_API_KEY = process.env.OPEN_WHEATHER_API_KEY
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY
 const IP_GEOLOCATION_API_KEY = process.env.IP_GEOLOCATION_API_KEY
