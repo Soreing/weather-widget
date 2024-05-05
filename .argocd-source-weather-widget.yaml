@@ -1,0 +1,3 @@
+kustomize:
+  images:
+  - soreing/weatherapp@sha256:6bd7ad5d8a50c85ce52c196054e38170875ba5846d2808c5e5ee0fb760ae8e5d
