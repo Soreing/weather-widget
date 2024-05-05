@@ -200,13 +200,14 @@ app.get("/", async (req,res)=>{
         weatherResponse = await weatherPromise
     } catch(err) {
         let errCode = 500
+        console.log(err)
         if (err.response) {
-            errCode = response.status
+            errCode = err.response.status
             console.log(JSON.stringify({
                 "level": "error", "ts":new Date().getTime(), 
                 "message": "failed to get weather information",
-                "tid": traceId, "err": err.message, "status": response.status, 
-                "data": response.data
+                "tid": traceId, "err": err.message, "status": err.response.status, 
+                "data": err.response.data
             }))
         } else if (err.request) {
             console.log(JSON.stringify({
@@ -232,12 +233,12 @@ app.get("/", async (req,res)=>{
     } catch(err) {
         let errCode = 500
         if (err.response) {
-            errCode = response.status
+            errCode = err.response.status
             console.log(JSON.stringify({
                 "level": "error", "ts":new Date().getTime(), 
                 "message": "failed to get location image",
-                "tid": traceId, "err": err.message, "status": response.status, 
-                "data": response.data
+                "tid": traceId, "err": err.message, "status": err.response.status, 
+                "data": err.response.data
             }))
         } else if (err.request) {
             console.log(JSON.stringify({
@@ -263,12 +264,12 @@ app.get("/", async (req,res)=>{
     } catch(err) {
         let errCode = 500
         if (err.response) {
-            errCode = response.status
+            errCode = err.response.status
             console.log(JSON.stringify({
                 "level": "error", "ts":new Date().getTime(), 
                 "message": "failed to get date time information",
-                "tid": traceId, "err": err.message, "status": response.status, 
-                "data": response.data
+                "tid": traceId, "err": err.message, "status": err.response.status, 
+                "data": err.response.data
             }))
         } else if (err.request) {
             console.log(JSON.stringify({
